@@ -1,5 +1,3 @@
-// lib/screens/history_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -8,7 +6,10 @@ import '../models/history_item.dart';
 import '../services/firestore_service.dart';
 
 class HistoryScreen extends StatelessWidget {
-  const HistoryScreen({Key? key}) : super(key: key);
+  final bool isAdmin;
+  final String? userId;
+  const HistoryScreen({Key? key, required this.isAdmin, this.userId})
+    : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -19,15 +20,14 @@ class HistoryScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Theme.of(context).primaryColor,
-        title: const Text(
-          'Riwayat Transaksi Slip Elektronik',
-          style: TextStyle(fontSize: 20.0),
-        ),
-        centerTitle: true,
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        foregroundColor: Colors.white,
+        title: const Text('Riwayat Transaksi'),
       ),
       body: StreamBuilder<List<HistoryItem>>(
-        stream: firestoreService.getHistoryStream(),
+        stream: firestoreService.getHistoryStream(
+          userId: isAdmin ? null : userId,
+        ),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -48,10 +48,17 @@ class HistoryScreen extends StatelessWidget {
 
           final historyList = snapshot.data!;
           return ListView.builder(
+            padding: const EdgeInsets.only(
+              top: 8.0,
+            ), // Beri sedikit padding di atas
             itemCount: historyList.length,
             itemBuilder: (context, index) {
               final item = historyList[index];
-              return _buildHistoryCard(context, item);
+              // Setiap kartu sekarang bisa ditekan untuk menampilkan detail
+              return InkWell(
+                onTap: () => _showSlipDialog(context, item),
+                child: _buildHistoryCard(context, item),
+              );
             },
           );
         },
@@ -59,55 +66,145 @@ class HistoryScreen extends StatelessWidget {
     );
   }
 
+  // Widget untuk menampilkan ringkasan di daftar
   Widget _buildHistoryCard(BuildContext context, HistoryItem item) {
     final servedTime = DateFormat(
-      'd MMM yyyy, HH:mm:ss',
+      'd MMM yyyy, HH:mm',
+      'id_ID',
     ).format(item.servedAt.toDate());
     final colorScheme = Theme.of(context).colorScheme;
 
     return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-      elevation: 3.0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Colors.grey.shade300, width: 1),
+      margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
+      elevation: 2.0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: colorScheme.primary,
+          child: Text(
+            item.queueNumber.toString(),
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        title: Text(
+          item.name,
+          style: const TextStyle(fontWeight: FontWeight.w500),
+        ),
+        subtitle: Text('Layanan: ${item.service}\nDilayani: $servedTime'),
+        trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+        isThreeLine: true,
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'No. Antrian: ${item.queueNumber}',
+    );
+  }
+
+  // BARU: Fungsi untuk menampilkan dialog slip elektronik
+  void _showSlipDialog(BuildContext context, HistoryItem item) {
+    // Formatter untuk mata uang Rupiah
+    final currencyFormatter = NumberFormat.currency(
+      locale: 'id_ID',
+      symbol: 'Rp ',
+      decimalDigits: 0,
+    );
+    // Formatter untuk tanggal dan waktu
+    final dateTimeFormatter = DateFormat('EEEE, d MMMM yyyy HH:mm:ss', 'id_ID');
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Slip Transaksi Elektronik'),
+          content: SingleChildScrollView(
+            child: ListBody(
+              children: <Widget>[
+                const Divider(),
+                _buildSlipDetailRow('No. Antrian', item.queueNumber.toString()),
+                _buildSlipDetailRow('Nama Nasabah', item.name),
+                _buildSlipDetailRow('Layanan', item.service),
+                const SizedBox(height: 12),
+                const Text(
+                  'DETAIL TRANSAKSI',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
-                    fontSize: 20,
-                    color: colorScheme.primary,
+                    color: Colors.grey,
                   ),
                 ),
-                const Icon(Icons.check_circle, color: Colors.green),
+                const Divider(),
+                _buildSlipDetailRow(
+                  'Jumlah',
+                  currencyFormatter.format(item.transactionAmount),
+                ),
+                _buildSlipDetailRow(
+                  'Catatan',
+                  item.transactionNotes.isEmpty ? '-' : item.transactionNotes,
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'WAKTU & PETUGAS',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey,
+                  ),
+                ),
+                const Divider(),
+                _buildSlipDetailRow(
+                  'Tanggal Kunjungan',
+                  dateTimeFormatter
+                          .format(item.appointmentDate.toDate())
+                          .split(' ')[0] +
+                      ' ' +
+                      dateTimeFormatter
+                          .format(item.appointmentDate.toDate())
+                          .split(' ')[1] +
+                      ' ' +
+                      dateTimeFormatter
+                          .format(item.appointmentDate.toDate())
+                          .split(' ')[2],
+                ),
+                _buildSlipDetailRow(
+                  'Waktu Dilayani',
+                  dateTimeFormatter.format(item.servedAt.toDate()),
+                ),
+                _buildSlipDetailRow('ID Teller', item.tellerId),
               ],
             ),
-            const Divider(height: 20),
-            Text(
-              item.name,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Layanan: ${item.service}',
-              style: const TextStyle(fontSize: 16),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Dilayani pada: $servedTime',
-              style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('Tutup'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
             ),
           ],
-        ),
+        );
+      },
+    );
+  }
+
+  // BARU: Helper widget untuk membuat baris detail agar kode tidak berulang
+  Widget _buildSlipDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            flex: 2,
+            child: Text(label, style: TextStyle(color: Colors.grey.shade700)),
+          ),
+          const Text(' : '),
+          Expanded(
+            flex: 3,
+            child: Text(
+              value,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+              textAlign: TextAlign.end,
+            ),
+          ),
+        ],
       ),
     );
   }

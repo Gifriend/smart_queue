@@ -1,16 +1,19 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
 import 'package:smart_queue/screens/splash_screen.dart';
 
-import 'firebase_options.dart'; // File ini di-generate oleh FlutterFire CLI
+import 'firebase_options.dart';
+import 'services/auth_service.dart';
 import 'services/firestore_service.dart';
 
 void main() async {
-  // Pastikan Flutter binding sudah siap
   WidgetsFlutterBinding.ensureInitialized();
-  // Inisialisasi Firebase
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  // INISIALISASI LOKALISASI BAHASA INDONESIA
+  await initializeDateFormatting('id_ID');
   runApp(const MyApp());
 }
 
@@ -21,8 +24,16 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     // Menyediakan FirestoreService ke seluruh aplikasi menggunakan Provider
     // DIUBAH: dari ChangeNotifierProvider menjadi Provider
-    return Provider<FirestoreService>(
-      create: (context) => FirestoreService(),
+    // MultiProvider HARUS membungkus MaterialApp
+    return MultiProvider(
+      providers: [
+        Provider<AuthService>(create: (_) => AuthService()),
+        Provider<FirestoreService>(create: (_) => FirestoreService()),
+        StreamProvider<User?>(
+          create: (context) => context.read<AuthService>().user,
+          initialData: null,
+        ),
+      ],
       child: MaterialApp(
         title: 'SmartQueue BSG',
         debugShowCheckedModeBanner: false,

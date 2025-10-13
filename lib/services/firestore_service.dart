@@ -12,9 +12,17 @@ class FirestoreService {
 
   // Mendapatkan stream/aliran data antrian secara real-time
   Stream<List<QueueItem>> getQueueStream() {
+    // Filter antrian untuk hari ini saja
+    DateTime now = DateTime.now();
+    DateTime startOfDay = DateTime(now.year, now.month, now.day);
+    DateTime endOfDay = DateTime(now.year, now.month, now.day, 23, 59, 59);
+
     return _db
-        .collection(_queueCollection) // Gunakan variabel
-        .orderBy('timestamp', descending: false)
+        .collection(_queueCollection)
+        .where('appointmentDate', isGreaterThanOrEqualTo: startOfDay)
+        .where('appointmentDate', isLessThanOrEqualTo: endOfDay)
+        .orderBy('appointmentDate')
+        .orderBy('timestamp') // Urutkan berdasarkan waktu ambil setelah tanggal
         .snapshots()
         .map(
           (snapshot) =>
@@ -23,10 +31,32 @@ class FirestoreService {
   }
 
   // Menambahkan item baru ke antrian
-  Future<void> addQueueItem(String name, String service) async {
+  Future<void> addQueueItem(
+    String name,
+    String service,
+    String userId,
+    DateTime appointmentDate,
+  ) async {
     return _db.runTransaction((transaction) async {
+      // Dapatkan nomor terakhir untuk tanggal yang dipilih
+      DateTime startOfDay = DateTime(
+        appointmentDate.year,
+        appointmentDate.month,
+        appointmentDate.day,
+      );
+      DateTime endOfDay = DateTime(
+        appointmentDate.year,
+        appointmentDate.month,
+        appointmentDate.day,
+        23,
+        59,
+        59,
+      );
+
       final querySnapshot = await _db
-          .collection(_queueCollection) // Gunakan variabel
+          .collection(_queueCollection)
+          .where('appointmentDate', isGreaterThanOrEqualTo: startOfDay)
+          .where('appointmentDate', isLessThanOrEqualTo: endOfDay)
           .orderBy('queueNumber', descending: true)
           .limit(1)
           .get();
@@ -37,18 +67,50 @@ class FirestoreService {
       }
 
       final newQueueNumber = lastNumber + 1;
-      final newDocRef = _db
-          .collection(_queueCollection)
-          .doc(); // Gunakan variabel
+      final newDocRef = _db.collection(_queueCollection).doc();
       final newItem = {
         'name': name,
         'service': service,
         'queueNumber': newQueueNumber,
         'timestamp': FieldValue.serverTimestamp(),
+        'userId': userId,
+        'appointmentDate': Timestamp.fromDate(appointmentDate),
       };
 
       transaction.set(newDocRef, newItem);
     });
+  }
+
+  Future<void> completeQueueItem({
+    required QueueItem item,
+    required String tellerId,
+    required double transactionAmount,
+    required String transactionNotes,
+  }) async {
+    final WriteBatch batch = _db.batch();
+
+    // 1. Siapkan dokumen untuk koleksi history
+    final historyDocRef = _db.collection(_historyCollection).doc(item.id);
+    batch.set(historyDocRef, {
+      'name': item.name,
+      'service': item.service,
+      'queueNumber': item.queueNumber,
+      'createdAt': item.timestamp,
+      'appointmentDate': item.appointmentDate,
+      'userId': item.userId,
+      'servedAt': FieldValue.serverTimestamp(),
+      'status': 'terlayani',
+      'tellerId': tellerId,
+      'transactionAmount': transactionAmount,
+      'transactionNotes': transactionNotes,
+    });
+
+    // 2. Hapus dokumen dari koleksi queue
+    final queueDocRef = _db.collection(_queueCollection).doc(item.id);
+    batch.delete(queueDocRef);
+
+    // 3. Jalankan semua operasi
+    await batch.commit();
   }
 
   // Memanggil nomor antrian berikutnya (memindahkan ke riwayat)
@@ -103,15 +165,18 @@ class FirestoreService {
   }
 
   // Mendapatkan stream/aliran data riwayat
-  Stream<List<HistoryItem>> getHistoryStream() {
-    return _db
-        .collection(_historyCollection) // Gunakan variabel
-        .orderBy('servedAt', descending: true)
-        .snapshots()
-        .map(
-          (snapshot) => snapshot.docs
-              .map((doc) => HistoryItem.fromFirestore(doc))
-              .toList(),
-        );
+  Stream<List<HistoryItem>> getHistoryStream({String? userId}) {
+    Query query = _db
+        .collection(_historyCollection)
+        .orderBy('servedAt', descending: true);
+    if (userId != null) {
+      query = query.where('userId', isEqualTo: userId);
+    }
+    // Perbaiki sintaks ... di sini
+    return query.snapshots().map((snapshot) {
+      return snapshot.docs
+          .map((doc) => HistoryItem.fromFirestore(doc))
+          .toList();
+    });
   }
 }

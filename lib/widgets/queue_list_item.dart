@@ -22,13 +22,13 @@ class QueueListItem extends StatelessWidget {
       listen: false,
     );
     final time = DateFormat('HH:mm').format(item.timestamp.toDate());
-    final colorScheme = Theme.of(context).colorScheme;
+    final colorScheme = Theme.of(context).primaryColor;
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: colorScheme.primary,
+          backgroundColor: colorScheme,
           child: Text(
             item.queueNumber.toString(),
             style: const TextStyle(

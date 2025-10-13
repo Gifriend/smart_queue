@@ -6,6 +6,8 @@ class QueueItem {
   final String service;
   final int queueNumber;
   final Timestamp timestamp;
+  final String userId; // BARU: ID pengguna yang membuat antrian
+  final Timestamp appointmentDate; // BARU: Tanggal janji temu yang dipilih
 
   QueueItem({
     required this.id,
@@ -13,9 +15,10 @@ class QueueItem {
     required this.service,
     required this.queueNumber,
     required this.timestamp,
+    required this.userId, // BARU
+    required this.appointmentDate, // BARU
   });
 
-  // Factory constructor untuk membuat instance dari Firestore document
   factory QueueItem.fromFirestore(DocumentSnapshot doc) {
     Map data = doc.data() as Map<String, dynamic>;
     return QueueItem(
@@ -24,16 +27,21 @@ class QueueItem {
       service: data['service'] ?? 'Lainnya',
       queueNumber: data['queueNumber'] ?? 0,
       timestamp: data['timestamp'] ?? Timestamp.now(),
+      // Baca data baru dari Firestore, berikan nilai default jika tidak ada
+      userId: data['userId'] ?? '',
+      appointmentDate: data['appointmentDate'] ?? Timestamp.now(),
     );
   }
 
-  // Method untuk mengubah instance menjadi Map untuk disimpan ke Firestore
+  // Method ini opsional tapi baik untuk dilengkapi
   Map<String, dynamic> toMap() {
     return {
       'name': name,
       'service': service,
       'queueNumber': queueNumber,
       'timestamp': timestamp,
+      'userId': userId,
+      'appointmentDate': appointmentDate,
     };
   }
 }
