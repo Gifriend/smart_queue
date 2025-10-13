@@ -12,7 +12,6 @@ class FirestoreService {
 
   // Mendapatkan stream/aliran data antrian secara real-time
   Stream<List<QueueItem>> getQueueStream() {
-    // Filter antrian untuk hari ini saja
     DateTime now = DateTime.now();
     DateTime startOfDay = DateTime(now.year, now.month, now.day);
     DateTime endOfDay = DateTime(now.year, now.month, now.day, 23, 59, 59);
@@ -22,7 +21,7 @@ class FirestoreService {
         .where('appointmentDate', isGreaterThanOrEqualTo: startOfDay)
         .where('appointmentDate', isLessThanOrEqualTo: endOfDay)
         .orderBy('appointmentDate')
-        .orderBy('timestamp') // Urutkan berdasarkan waktu ambil setelah tanggal
+        .orderBy('timestamp')
         .snapshots()
         .map(
           (snapshot) =>
@@ -38,7 +37,6 @@ class FirestoreService {
     DateTime appointmentDate,
   ) async {
     return _db.runTransaction((transaction) async {
-      // Dapatkan nomor terakhir untuk tanggal yang dipilih
       DateTime startOfDay = DateTime(
         appointmentDate.year,
         appointmentDate.month,
@@ -76,7 +74,6 @@ class FirestoreService {
         'userId': userId,
         'appointmentDate': Timestamp.fromDate(appointmentDate),
       };
-
       transaction.set(newDocRef, newItem);
     });
   }
@@ -89,7 +86,6 @@ class FirestoreService {
   }) async {
     final WriteBatch batch = _db.batch();
 
-    // 1. Siapkan dokumen untuk koleksi history
     final historyDocRef = _db.collection(_historyCollection).doc(item.id);
     batch.set(historyDocRef, {
       'name': item.name,
@@ -105,58 +101,51 @@ class FirestoreService {
       'transactionNotes': transactionNotes,
     });
 
-    // 2. Hapus dokumen dari koleksi queue
     final queueDocRef = _db.collection(_queueCollection).doc(item.id);
     batch.delete(queueDocRef);
 
-    // 3. Jalankan semua operasi
     await batch.commit();
   }
 
   // Memanggil nomor antrian berikutnya (memindahkan ke riwayat)
-  Future<void> callNextItem() async {
-    final querySnapshot = await _db
-        .collection(_queueCollection) // Gunakan variabel
-        .orderBy('timestamp', descending: false)
-        .limit(1)
-        .get();
-
-    if (querySnapshot.docs.isNotEmpty) {
-      final docToMove = querySnapshot.docs.first;
-      final data = docToMove.data();
-      final batch = _db.batch();
-
-      final historyDocRef = _db
-          .collection(_historyCollection)
-          .doc(docToMove.id);
-      batch.set(historyDocRef, {
-        'name': data['name'],
-        'service': data['service'],
-        'queueNumber': data['queueNumber'],
-        'createdAt': data['timestamp'],
-        'servedAt': FieldValue.serverTimestamp(),
-        'status': 'terlayani',
-      });
-
-      batch.delete(docToMove.reference);
-      await batch.commit();
-    }
-  }
+  // Future<void> callNextItem() async {
+  //   final querySnapshot = await _db
+  //       .collection(_queueCollection) // Gunakan variabel
+  //       .orderBy('timestamp', descending: false)
+  //       .limit(1)
+  //       .get();
+  //
+  //   if (querySnapshot.docs.isNotEmpty) {
+  //     final docToMove = querySnapshot.docs.first;
+  //     final data = docToMove.data();
+  //     final batch = _db.batch();
+  //
+  //     final historyDocRef = _db
+  //         .collection(_historyCollection)
+  //         .doc(docToMove.id);
+  //     batch.set(historyDocRef, {
+  //       'name': data['name'],
+  //       'service': data['service'],
+  //       'queueNumber': data['queueNumber'],
+  //       'createdAt': data['timestamp'],
+  //       'servedAt': FieldValue.serverTimestamp(),
+  //       'status': 'terlayani',
+  //     });
+  //
+  //     batch.delete(docToMove.reference);
+  //     await batch.commit();
+  //   }
+  // }
 
   // Menghapus item antrian spesifik berdasarkan ID
   Future<void> deleteQueueItem(String id) {
-    return _db
-        .collection(_queueCollection)
-        .doc(id)
-        .delete(); // Gunakan variabel
+    return _db.collection(_queueCollection).doc(id).delete();
   }
 
   // Menghapus semua item dalam antrian
   Future<void> clearAllQueue() async {
     final WriteBatch batch = _db.batch();
-    final querySnapshot = await _db
-        .collection(_queueCollection)
-        .get(); // Gunakan variabel
+    final querySnapshot = await _db.collection(_queueCollection).get();
 
     for (var doc in querySnapshot.docs) {
       batch.delete(doc.reference);
@@ -172,7 +161,6 @@ class FirestoreService {
     if (userId != null) {
       query = query.where('userId', isEqualTo: userId);
     }
-    // Perbaiki sintaks ... di sini
     return query.snapshots().map((snapshot) {
       return snapshot.docs
           .map((doc) => HistoryItem.fromFirestore(doc))
