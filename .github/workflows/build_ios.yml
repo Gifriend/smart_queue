@@ -1,14 +1,12 @@
-name: Build Flutter iOS IPA
+name: Build Flutter iOS IPA (Unsigned)
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
   build-ios:
-    name: Build iOS IPA
     runs-on: macos-latest
 
     steps:
@@ -26,8 +24,8 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Build iOS IPA
-        run: flutter build ipa --release
+      - name: Build iOS IPA (Unsigned)
+        run: flutter build ipa --release --no-codesign
 
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
