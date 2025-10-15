@@ -15,10 +15,13 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Setup Flutter
+      - name: Setup Flutter 3.32.2
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: 'stable'
+          flutter-version: '3.32.2'
+
+      - name: Verify Flutter version
+        run: flutter --version
 
       - name: Install dependencies
         run: flutter pub get
