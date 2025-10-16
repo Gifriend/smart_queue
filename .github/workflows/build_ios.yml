@@ -1,12 +1,14 @@
-name: Build Flutter iOS IPA (Unsigned Export)
+name: Build Flutter iOS IPA (Unsigned)
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
   build-ios:
+    name: Build Unsigned iOS IPA
     runs-on: macos-latest
 
     steps:
@@ -24,11 +26,9 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      # 🔹 Build archive & IPA (no signing)
-      - name: Build iOS IPA (no codesign)
+      - name: Build iOS archive (no codesign)
         run: flutter build ipa --release --no-codesign
 
-      # 🔹 Generate ExportOptions.plist dynamically
       - name: Generate ExportOptions.plist
         run: |
           mkdir -p ios
@@ -38,7 +38,7 @@ jobs:
           <plist version="1.0">
           <dict>
             <key>method</key>
-            <string>ad-hoc</string>
+            <string>release-testing</string>
             <key>signingStyle</key>
             <string>manual</string>
             <key>compileBitcode</key>
@@ -53,24 +53,20 @@ jobs:
           </plist>
           EOF
 
-      # 🔹 Create IPA directory
-      - name: Create IPA directory
-        run: mkdir -p build/ios/ipa
-
-      # 🔹 Export IPA from the generated archive
-      - name: Export unsigned IPA manually
+      - name: Export IPA manually
         run: |
+          mkdir -p build/ios/ipa
           if [ -d "build/ios/archive/Runner.xcarchive" ]; then
             echo "Found archive, exporting..."
             xcodebuild -exportArchive \
               -archivePath build/ios/archive/Runner.xcarchive \
-              -exportPath build/ios/ipa \
-              -exportOptionsPlist ios/ExportOptions.plist || true
+              -exportOptionsPlist ios/ExportOptions.plist \
+              -exportPath build/ios/ipa
           else
-            echo "⚠️ Archive not found, using Flutter output IPA instead (if exists)"
+            echo "❌ No archive found, check flutter build output."
+            exit 1
           fi
 
-      # 🔹 Upload IPA artifact
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
         with:
