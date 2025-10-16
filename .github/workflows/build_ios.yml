@@ -1,4 +1,4 @@
-name: Build Flutter iOS IPA (Unsigned Manual Export)
+name: Build Flutter iOS IPA (Unsigned Export)
 
 on:
   push:
@@ -24,19 +24,53 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Build iOS Archive (No Code Sign)
-        run: flutter build ios --release --no-codesign
+      # 🔹 Build archive & IPA (no signing)
+      - name: Build iOS IPA (no codesign)
+        run: flutter build ipa --release --no-codesign
 
+      # 🔹 Generate ExportOptions.plist dynamically
+      - name: Generate ExportOptions.plist
+        run: |
+          mkdir -p ios
+          cat <<EOF > ios/ExportOptions.plist
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>ad-hoc</string>
+            <key>signingStyle</key>
+            <string>manual</string>
+            <key>compileBitcode</key>
+            <false/>
+            <key>destination</key>
+            <string>export</string>
+            <key>stripSwiftSymbols</key>
+            <true/>
+            <key>thinning</key>
+            <string>&lt;none&gt;</string>
+          </dict>
+          </plist>
+          EOF
+
+      # 🔹 Create IPA directory
       - name: Create IPA directory
         run: mkdir -p build/ios/ipa
 
-      - name: Export unsigned IPA from Xcode archive
+      # 🔹 Export IPA from the generated archive
+      - name: Export unsigned IPA manually
         run: |
-          xcodebuild -exportArchive \
-            -archivePath build/ios/archive/Runner.xcarchive \
-            -exportPath build/ios/ipa \
-            -exportOptionsPlist ios/ExportOptions.plist || true
+          if [ -d "build/ios/archive/Runner.xcarchive" ]; then
+            echo "Found archive, exporting..."
+            xcodebuild -exportArchive \
+              -archivePath build/ios/archive/Runner.xcarchive \
+              -exportPath build/ios/ipa \
+              -exportOptionsPlist ios/ExportOptions.plist || true
+          else
+            echo "⚠️ Archive not found, using Flutter output IPA instead (if exists)"
+          fi
 
+      # 🔹 Upload IPA artifact
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
         with:
