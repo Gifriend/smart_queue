@@ -29,46 +29,26 @@ jobs:
       - name: Build iOS archive (no codesign)
         run: flutter build ipa --release --no-codesign
 
-      - name: Generate ExportOptions.plist
+      # 🔧 Buat IPA manual dari hasil archive
+      - name: Package unsigned IPA manually
         run: |
-          mkdir -p ios
-          cat <<EOF > ios/ExportOptions.plist
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>method</key>
-            <string>release-testing</string>
-            <key>signingStyle</key>
-            <string>manual</string>
-            <key>compileBitcode</key>
-            <false/>
-            <key>destination</key>
-            <string>export</string>
-            <key>stripSwiftSymbols</key>
-            <true/>
-            <key>thinning</key>
-            <string>&lt;none&gt;</string>
-          </dict>
-          </plist>
-          EOF
+          mkdir -p build/ios/ipa/Payload
+          ARCHIVE_APP_PATH="build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app"
 
-      - name: Export IPA manually
-        run: |
-          mkdir -p build/ios/ipa
-          if [ -d "build/ios/archive/Runner.xcarchive" ]; then
-            echo "Found archive, exporting..."
-            xcodebuild -exportArchive \
-              -archivePath build/ios/archive/Runner.xcarchive \
-              -exportOptionsPlist ios/ExportOptions.plist \
-              -exportPath build/ios/ipa
+          if [ -d "$ARCHIVE_APP_PATH" ]; then
+            echo "✅ Found Runner.app, creating unsigned IPA..."
+            cp -R "$ARCHIVE_APP_PATH" build/ios/ipa/Payload/Runner.app
+            cd build/ios/ipa
+            zip -r Runner-unsigned.ipa Payload
+            cd ../../../
+            echo "✅ Unsigned IPA created at build/ios/ipa/Runner-unsigned.ipa"
           else
-            echo "❌ No archive found, check flutter build output."
+            echo "❌ Runner.app not found in archive! Build may have failed."
             exit 1
           fi
 
-      - name: Upload IPA Artifact
+      - name: Upload Unsigned IPA Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Runner-IPA
-          path: build/ios/ipa/
+          path: build/ios/ipa/Runner-unsigned.ipa
